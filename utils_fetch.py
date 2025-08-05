@@ -1,59 +1,52 @@
 import time
 import yfinance as yf
-from nsetools import Nse                # pip install nsetools
 
-nse_client = Nse()
-
-def fetch_yahoo_or_nse(symbol: str,
-                       period="1mo",
-                       interval="1d",
-                       max_retries=3,
-                       pause=2):
+def fetch_yahoo_or_nse(symbol: str, period="1mo", interval="1d", max_retries=3, pause=2):
     """
-    Robust data loader.
-    • Tries yfinance up to max_retries times (single-threaded).
-    • If that fails, falls back to a one-row DataFrame from NSE live quote.
-    Returns a pandas DataFrame or None.
+    Robust data loader with better error handling
     """
+    # Ensure proper suffix
     if not (symbol.endswith(".NS") or symbol.startswith("^")):
         symbol += ".NS"
-
-    # ---------- yfinance with retries ----------
+    
+    print(f"Attempting to fetch {symbol} with period={period}, interval={interval}")
+    
+    # Try yfinance first
     for attempt in range(1, max_retries + 1):
         try:
-            df = yf.download(
-                symbol,
-                period=period,
-                interval=interval,
-                auto_adjust=True,
-                progress=False,
-                threads=False        # reduces Yahoo rate-limit hits
-            )
+            print(f"[yfinance] Attempt {attempt}/{max_retries}")
+            
+            # Use Ticker.history() instead of yf.download()
+            ticker = yf.Ticker(symbol)
+            df = ticker.history(period=period, interval=interval)
+            
             if not df.empty:
+                print(f"[yfinance] Success! Got {len(df)} rows")
                 return df
-            print(f"[yfinance] empty DF ({attempt}/{max_retries})")
+            else:
+                print(f"[yfinance] Empty DataFrame on attempt {attempt}")
+                
         except Exception as e:
-            print(f"[yfinance] {symbol} attempt {attempt}: {e}")
-        time.sleep(pause)
-
-    # ---------- fallback to NSETools ----------
+            print(f"[yfinance] Error on attempt {attempt}: {str(e)}")
+        
+        if attempt < max_retries:
+            time.sleep(pause)
+    
+    # If yfinance fails, try a simple fallback
     try:
-        clean = symbol.replace(".NS", "")
-        q = nse_client.get_quote(clean)
-        if q:
-            import pandas as pd, datetime as dt
-            now = dt.datetime.now()
-            return pd.DataFrame(
-                {
-                    "Open":  [q["open"]],
-                    "High":  [q["dayHigh"]],
-                    "Low":   [q["dayLow"]],
-                    "Close": [q["lastPrice"]],
-                    "Volume":[q["totalTradedVolume"]],
-                },
-                index=[now],
-            )
-    except Exception as e2:
-        print(f"[nsetools] fallback failed: {e2}")
-
+        print("[fallback] Trying basic yfinance download...")
+        import pandas as pd
+        
+        # Try a very simple download
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(period="5d")  # Force 5 days
+        
+        if not df.empty:
+            print("[fallback] Success with 5-day data")
+            return df
+            
+    except Exception as e:
+        print(f"[fallback] Failed: {e}")
+    
+    print(f"[ERROR] All methods failed for {symbol}")
     return None
