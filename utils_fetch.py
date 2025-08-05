@@ -1,7 +1,6 @@
-# ----------------- utils_fetch.py (add to same folder) -----------------
 import time
 import yfinance as yf
-from nsetools import Nse                     #  pip install nsetools
+from nsetools import Nse                # pip install nsetools
 
 nse_client = Nse()
 
@@ -11,10 +10,11 @@ def fetch_yahoo_or_nse(symbol: str,
                        max_retries=3,
                        pause=2):
     """
-    Tries yfinance first (with retries); if that fails returns a one-row
-    DataFrame built from live NSE quote so the dashboard never breaks.
+    Robust data loader.
+    • Tries yfinance up to max_retries times (single-threaded).
+    • If that fails, falls back to a one-row DataFrame from NSE live quote.
+    Returns a pandas DataFrame or None.
     """
-    # ensure proper suffix
     if not (symbol.endswith(".NS") or symbol.startswith("^")):
         symbol += ".NS"
 
@@ -27,7 +27,7 @@ def fetch_yahoo_or_nse(symbol: str,
                 interval=interval,
                 auto_adjust=True,
                 progress=False,
-                threads=False           # single thread ↓ rate-limits
+                threads=False        # reduces Yahoo rate-limit hits
             )
             if not df.empty:
                 return df
@@ -39,7 +39,7 @@ def fetch_yahoo_or_nse(symbol: str,
     # ---------- fallback to NSETools ----------
     try:
         clean = symbol.replace(".NS", "")
-        q = nse_client.get_quote(clean)          # dict with live quote
+        q = nse_client.get_quote(clean)
         if q:
             import pandas as pd, datetime as dt
             now = dt.datetime.now()
@@ -56,5 +56,4 @@ def fetch_yahoo_or_nse(symbol: str,
     except Exception as e2:
         print(f"[nsetools] fallback failed: {e2}")
 
-    # everything failed
     return None
