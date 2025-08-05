@@ -3,3 +3,5 @@ yfinance==0.2.18
 plotly==5.17.0
 pandas==2.3.1
 nsetools==1.0.12
+requests==2.32.4
+urllib3==2.5.0
